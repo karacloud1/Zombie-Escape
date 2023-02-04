@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
@@ -6,18 +8,37 @@ public class PlayerController : MonoBehaviour
     private float walkSpeed = 8f;
 
     [SerializeField] private float runSpeed = 14f;
+    [SerializeField] private float gravityModifer = 0.95f;
+    [SerializeField] private float jumpPower = 0.25f;
+    [SerializeField] private InputAction newMovementInput;
 
     [Header("Mouse Control Options")] [SerializeField]
     private float mouseSensivity = 1f;
 
     [SerializeField] private float maxViewAngle = 60f;
+    [SerializeField] private bool invertX;
+    [SerializeField] private bool invertY;
+
     private CharacterController _characterController;
     private float _currentSpeed = 8f;
 
     private float _horizontalInput;
     private float _verticalInput;
 
+    private Vector3 _heightMovement;
+    private bool _jump = false;
+
     private Transform _mainCamera;
+
+    private void OnEnable()
+    {
+        newMovementInput.Enable();
+    }
+
+    private void OnDisable()
+    {
+        newMovementInput.Disable();
+    }
 
     private void Awake()
     {
@@ -47,7 +68,6 @@ public class PlayerController : MonoBehaviour
             transform.eulerAngles.z);
         if (_mainCamera != null)
         {
-
             if (_mainCamera.eulerAngles.x > maxViewAngle && _mainCamera.eulerAngles.x < 180f)
             {
                 _mainCamera.rotation =
@@ -68,25 +88,42 @@ public class PlayerController : MonoBehaviour
 
     private Vector2 MouseInput()
     {
-        return new Vector2(Input.GetAxisRaw("Mouse X"), Input.GetAxisRaw("Mouse Y")) * mouseSensivity;
+        return new Vector2(invertX ? -Mouse.current.delta.x.ReadValue() : Mouse.current.delta.x.ReadValue(),
+            invertY ? -Mouse.current.delta.y.ReadValue() : Mouse.current.delta.y.ReadValue()) * mouseSensivity;
     }
 
     private void Move()
     {
+        if (_jump)
+        {
+            _heightMovement.y = jumpPower;
+            _jump = false;
+        }
+
+        _heightMovement.y -= gravityModifer * Time.deltaTime;
         Vector3 localVerticalVector = transform.forward * _verticalInput;
         Vector3 localHorizontalVector = transform.right * _horizontalInput;
 
         var movementVector = localVerticalVector + localHorizontalVector;
         movementVector.Normalize();
         movementVector *= _currentSpeed * Time.deltaTime;
-        _characterController.Move(movementVector);
+        _characterController.Move(movementVector + _heightMovement);
+        if (_characterController.isGrounded)
+        {
+            _heightMovement.y = 0f;
+        }
     }
 
     private void KeyboardInput()
     {
-        _horizontalInput = Input.GetAxisRaw("Horizontal");
-        _verticalInput = Input.GetAxisRaw("Vertical");
+        if (Keyboard.current.spaceKey.wasPressedThisFrame && _characterController.isGrounded)
+        {
+            _jump = true;
+        }
 
-        _currentSpeed = Input.GetKey(KeyCode.LeftShift) ? runSpeed : walkSpeed;
+        _horizontalInput = newMovementInput.ReadValue<Vector2>().x;
+        _verticalInput = newMovementInput.ReadValue<Vector2>().y;
+
+        _currentSpeed = Keyboard.current.leftShiftKey.isPressed ? runSpeed : walkSpeed;
     }
 }
